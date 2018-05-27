@@ -38,7 +38,7 @@ Data::~Data()
    in.close();
 }
 
-/* 
+/*
  *                   plink BED           sparsnp
  * minor homozyous:  00 => numeric 0     10 => numeric 2
  * heterozygous:     10 => numeric 2     01 => numeric 1
@@ -60,7 +60,7 @@ Data::~Data()
  * out: array of genotypes
  * in: array of packed genotypes (bytes)
  * n: number of bytes in input
- * 
+ *
  */
 void decode_plink(unsigned char * __restrict__ out,
    const unsigned char * __restrict__ in,
@@ -149,7 +149,7 @@ void decode_plink_simple(unsigned char * __restrict__ out,
 
 void Data::get_size()
 {
-   verbose && STDOUT << timestamp() << "Analyzing BED file '" 
+   verbose && STDOUT << timestamp() << "Analyzing BED file '"
       << geno_filename << "'";
    std::ifstream in(geno_filename, std::ios::in | std::ios::binary);
 
@@ -193,7 +193,7 @@ void Data::prepare()
    // Allocate more than the sample size since data must take up whole bytes
    tmp2 = new unsigned char[np * PACK_DENSITY];
 
-   avg = new double[nsnps](); 
+   avg = new double[nsnps]();
    visited = new bool[nsnps]();
    X_meansd = MatrixXd::Zero(nsnps, 2); // TODO: duplication here with avg
 
@@ -201,7 +201,7 @@ void Data::prepare()
 
    verbose && STDOUT << timestamp() << "Detected BED file: "
       << geno_filename << " with " << (len + 3)
-      << " bytes, " << N << " samples, " << nsnps 
+      << " bytes, " << N << " samples, " << nsnps
       << " SNPs." << std::endl;
 }
 
@@ -247,6 +247,8 @@ void Data::read_snp_block(unsigned int start_idx, unsigned int stop_idx,
       unsigned int k = start_idx + j;
 
       // read raw genotypes
+      // replace this with PgrGet(nullptr, nullptr, N, k, pgrp, (uintptr_t*)tmp)
+      // then with PgrGetD(nullptr, nullptr, N, k, pgrp, (uintptr_t*)tmp, dosage_present, dosage_main, &dosage_ct)
       in.read((char*)tmp, sizeof(char) * np);
 
       // Compute average per SNP, excluding missing values
@@ -349,6 +351,8 @@ void Data::read_bed(bool transpose)
    for(unsigned int j = 0 ; j < nsnps; j++)
    {
       // read raw genotypes
+      // replace this with PgrGet(nullptr, nullptr, N, k, pgrp, (uintptr_t*)tmp)
+      // then with PgrGetD(nullptr, nullptr, N, k, pgrp, (uintptr_t*)tmp, dosage_present, dosage_main, &dosage_ct)
       in.read((char*)tmp, sizeof(char) * np);
 
       // decode the genotypes
@@ -392,7 +396,7 @@ void Data::read_bed(bool transpose)
 
       if(verbose && j % md == md - 1)
 	 STDOUT << timestamp() << "Reading genotypes, "
-	    << roundl(((double)j / nsnps) * 100) << "% done" 
+	    << roundl(((double)j / nsnps) * 100) << "% done"
 	    << std::endl;
    }
 
@@ -415,7 +419,7 @@ void Data::read_pheno(const char *filename, unsigned int firstcol)
 // Reads PLINK phenotype files:
 // FID IID pheno1 pheno2 ...
 // Need to be able to read continuous phenotypes
-// 
+//
 // firstcol is _one-based_, 3 for pheno file, 6 for FAM file (ignoring sex),
 // 5 for FAM file (with gender)
 NamedMatrixWrapper read_text(const char *filename,
@@ -435,7 +439,7 @@ NamedMatrixWrapper read_text(const char *filename,
       throw std::runtime_error(err);
    }
    std::vector<std::string> lines;
-   
+
    while(in)
    {
       std::string line;
@@ -514,7 +518,7 @@ void Data::read_plink_bim(const char *filename)
       throw std::runtime_error(err);
    }
    std::vector<std::string> lines;
-   
+
    while(in)
    {
       std::string line;
@@ -564,7 +568,7 @@ void Data::read_plink_fam(const char *filename)
       throw std::runtime_error(err);
    }
    std::vector<std::string> lines;
-   
+
    while(in)
    {
       std::string line;
@@ -594,4 +598,3 @@ std::string Data::tolower(const std::string& v)
    std::transform(r.begin(), r.end(), r.begin(), ::tolower);
    return r;
 }
-

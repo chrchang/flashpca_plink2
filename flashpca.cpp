@@ -597,17 +597,20 @@ int main(int argc, char * argv[])
       data.read_plink_bim(bim_file.c_str());
       data.read_plink_fam(fam_file.c_str());
 
-      data.geno_filename = geno_file.c_str();
-      data.get_size();
+      if (0) {
+      } else {
+         data.geno_filename = geno_file.c_str();
+         data.get_size();
 
-      if(mem_mode == MEM_MODE_OFFLINE)
-      {
-         data.prepare();
-         data.read_bed(false);
-      }
-      else if(mem_mode == MEM_MODE_ONLINE)
-      {
-         data.prepare();
+         if(mem_mode == MEM_MODE_OFFLINE)
+         {
+            data.prepare();
+            data.read_bed(false);
+         }
+         else if(mem_mode == MEM_MODE_ONLINE)
+         {
+            data.prepare();
+         }
       }
 
       RandomPCA rpca;

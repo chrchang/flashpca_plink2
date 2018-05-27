@@ -21,6 +21,8 @@
 
 #include "util.h"
 
+#include "pgenlib_internal.h"
+
 #define PACK_DENSITY 4
 #define PLINK_NA 3
 
@@ -59,7 +61,7 @@ class NamedMatrixWrapper {
 
 class Data {
    public:
-      
+
       MatrixXd X, Y;
       MatrixXd X_meansd;
       unsigned int N, p, K;
@@ -75,11 +77,12 @@ class Data {
       std::vector<std::string> alt_alleles;
       bool use_preloaded_maf;
       int stand_method_x;
-      
+
       Data();
       ~Data();
       void prepare();
       void read_bed(bool transpose);
+      void read_pgen();
       void read_snp_block(unsigned int start_idx, unsigned int stop_idx,
 	 bool transpose, bool resize);
       void get_size();
@@ -107,4 +110,3 @@ NamedMatrixWrapper read_text(
 void decode_plink(unsigned char * __restrict__ out,
    const unsigned char * __restrict__ in,
    const unsigned int n);
-
