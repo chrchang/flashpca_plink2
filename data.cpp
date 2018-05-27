@@ -23,6 +23,7 @@ Data::Data()
    avg = NULL;
    verbose = false;
    use_preloaded_maf = false;
+   pgfi_alloc = nullptr;
    plink2::PreinitPgfi(&pgfi);
    plink2::PreinitPgr(&pgr);
 }
@@ -39,7 +40,8 @@ Data::~Data()
       delete[] avg;
    plink2::CleanupPgr(&pgr);
    plink2::CleanupPgfi(&pgfi);
-   in.close();
+   plink2::aligned_free_cond(pgfi_alloc);
+   // in.close();
 }
 
 /*
@@ -153,8 +155,21 @@ void decode_plink_simple(unsigned char * __restrict__ out,
 
 void Data::get_size()
 {
-   verbose && STDOUT << timestamp() << "Analyzing BED file '"
+   verbose && STDOUT << timestamp() << "Analyzing BED/PGEN file '"
       << geno_filename << "'";
+   /*
+   plink2::PgenHeaderCtrl header_ctrl;
+   char errstr_buf[plink2::kPglErrstrBufBlen];
+   plink2::PglErr reterr = PgfiInitPhase1(geno_filename, 0xffffffffU, N, 0, &header_ctrl, &pgfi, &pgfi_alloc_cacheline_ct, errstr_buf);
+   if (reterr) {
+      throw std::runtime_error(errstr_buf);
+   }
+   if (cachealigned_malloc(pgfi_alloc_cacheline_ct * plink2::kCacheline, &pgfi_alloc)) {
+      throw std::runtime_error("Out of memory.");
+   }
+   nsnps = pgfi.raw_variant_ct;
+   ;;;
+   */
    std::ifstream in(geno_filename, std::ios::in | std::ios::binary);
 
    if(!in)

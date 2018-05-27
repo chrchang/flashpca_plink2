@@ -65,7 +65,7 @@ class Data {
       MatrixXd X, Y;
       MatrixXd X_meansd;
       unsigned int N, p, K;
-      unsigned long long len, np;
+      unsigned long long len;
       unsigned int nsnps;
       const char *geno_filename;
       bool verbose;
@@ -95,8 +95,10 @@ class Data {
    private:
       unsigned char *tmp, *tmp2;
 
+      unsigned long long np;
       std::ifstream in;
       plink2::PgenFileInfo pgfi;
+      unsigned char* pgfi_alloc;
       plink2::PgenReader pgr;
       double* avg;
       //VectorXd tmpx;
