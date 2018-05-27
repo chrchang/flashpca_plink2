@@ -3,10 +3,10 @@
 
 VERSION=2.0
 
-EIGEN_INC=/usr/local/include/eigen
-BOOST_INC=/usr/local/include/boost
+EIGEN_INC=../eigen-git-mirror
+BOOST_INC=../boost_1_62_0/boost
 BOOST_LIB=/usr/local/lib
-SPECTRA_INC=spectra/include
+SPECTRA_INC=../spectra/include
 
 all: flashpca
 static: flashpca_x86-64
