@@ -17,7 +17,9 @@ OBJ = \
    svdwide.o \
    svdtall.o \
    data.o \
-   util.o
+   util.o \
+   plink2_base.o \
+   pgenlib_internal.o
 
 CXXFLAGS += -I${SPECTRA_INC} -I${BOOST_INC} -I${EIGEN_INC}
 
@@ -39,7 +41,7 @@ debug: $(OBJ)
 flashpca: LDFLAGS = $(BOOST)
 flashpca: CXXFLAGS += -O3 -DNDEBUG -DVERSION=\"$(VERSION)\" \
    -funroll-loops -ftree-vectorize -ffast-math
-flashpca: flashpca.o randompca.o data.o util.o svdwide.o svdtall.o
+flashpca: flashpca.o randompca.o data.o util.o svdwide.o svdtall.o plink2_base.o pgenlib_internal.o
 	$(CXX) $(CXXFLAGS) -o flashpca $^ $(LDFLAGS)
 
 flashpca_x86-64: LDFLAGS = $(BOOST) -Wl,--whole-archive -lpthread -Wl,--no-whole-archive
