@@ -24,6 +24,7 @@ Data::Data()
    verbose = false;
    use_preloaded_maf = false;
    pgfi_alloc = nullptr;
+   printf("wtf\n");
    plink2::PreinitPgfi(&pgfi);
    plink2::PreinitPgr(&pgr);
 }
@@ -38,6 +39,7 @@ Data::~Data()
       delete[] tmp2;
    if(avg)
       delete[] avg;
+   printf("destroy\n");
    plink2::CleanupPgr(&pgr);
    plink2::CleanupPgfi(&pgfi);
    plink2::aligned_free_cond(pgfi_alloc);
