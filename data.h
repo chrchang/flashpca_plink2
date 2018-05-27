@@ -94,7 +94,10 @@ class Data {
 
    private:
       unsigned char *tmp, *tmp2;
+
       std::ifstream in;
+      plink2::PgenFileInfo pgfi;
+      plink2::PgenReader pgr;
       double* avg;
       //VectorXd tmpx;
       bool* visited;

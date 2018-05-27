@@ -23,6 +23,8 @@ Data::Data()
    avg = NULL;
    verbose = false;
    use_preloaded_maf = false;
+   plink2::PreinitPgfi(&pgfi);
+   plink2::PreinitPgr(&pgr);
 }
 
 Data::~Data()
@@ -35,6 +37,8 @@ Data::~Data()
       delete[] tmp2;
    if(avg)
       delete[] avg;
+   plink2::CleanupPgr(&pgr);
+   plink2::CleanupPgfi(&pgfi);
    in.close();
 }
 
