@@ -607,7 +607,7 @@ int main(int argc, char * argv[])
       if(mem_mode == MEM_MODE_OFFLINE)
       {
          data.prepare();
-         data.read_bed(false);
+         data.read_bed();
       }
       else if(mem_mode == MEM_MODE_ONLINE)
       {

@@ -18,12 +18,14 @@ Data::Data()
    K = 0;
    nsnps = 0;
    visited = NULL;
-   tmp = NULL;
-   tmp2 = NULL;
+   genovec = NULL;
+   // dosage_present = NULL;
+   // dosage_main = NULL;
    avg = NULL;
    verbose = false;
    use_preloaded_maf = false;
    pgfi_alloc = nullptr;
+   pgr_alloc = nullptr;
    plink2::PreinitPgfi(&pgfi);
    plink2::PreinitPgr(&pgr);
 }
@@ -32,15 +34,13 @@ Data::~Data()
 {
    if(visited)
       delete[] visited;
-   if(tmp)
-      delete[] tmp;
-   if(tmp2)
-      delete[] tmp2;
+   plink2::aligned_free_cond(genovec);
    if(avg)
       delete[] avg;
    plink2::CleanupPgr(&pgr);
    plink2::CleanupPgfi(&pgfi);
    plink2::aligned_free_cond(pgfi_alloc);
+   plink2::aligned_free_cond(pgr_alloc);
    in.close();
 }
 
@@ -73,94 +73,8 @@ Data::~Data()
 #define PLINK2_SCALE 16384
 #define PLINK2_INVSCALE (1.0 / PLINK2_SCALE)
 
-void decode_plink(uint16_t * __restrict__ out,
-   const unsigned char * __restrict__ in,
-   const unsigned int n)
-{
-   unsigned int i, k;
-   unsigned char tmp, geno1, geno2, geno3, geno4;
-   unsigned int a1, a2;
-
-   for(i = 0 ; i < n ; i++)
-   {
-      tmp = in[i];
-      k = PACK_DENSITY * i;
-
-      /* geno is interpreted as a char, however a1 and a2 are bits for allele 1 and
-       * allele 2. The final genotype is the sum of the alleles, except for 01
-       * which denotes missing.
-       */
-
-      geno1 = (tmp & MASK0);
-      if(geno1 == 1)
-	 out[k] = PLINK2_NA;
-      else
-      {
-	 a1 = !(geno1 & 1);
-	 a2 = !(geno1 >> 1);
-	 out[k] = (a1 + a2) * PLINK2_SCALE;
-      }
-      k++;
-
-      geno2 = (tmp & MASK1) >> 2;
-      if(geno2 == 1)
-	 out[k] = PLINK2_NA;
-      else
-      {
-	 a1 = !(geno2 & 1);
-	 a2 = !(geno2 >> 1);
-	 out[k] = (a1 + a2) * PLINK2_SCALE;
-      }
-      k++;
-
-      geno3 = (tmp & MASK2) >> 4;
-      if(geno3 == 1)
-	 out[k] = PLINK2_NA;
-      else
-      {
-	 a1 = !(geno3 & 1);
-	 a2 = !(geno3 >> 1);
-	 out[k] = (a1 + a2) * PLINK2_SCALE;
-      }
-      k++;
-
-      geno4 = (tmp & MASK3) >> 6;
-      if(geno4 == 1)
-	 out[k] = PLINK2_NA;
-      else
-      {
-	 a1 = !(geno4 & 1);
-	 a2 = !(geno4 >> 1);
-	 out[k] = (a1 + a2) * PLINK2_SCALE;
-      }
-   }
-}
-
-/*
-void decode_plink_simple(uint16_t * __restrict__ out,
-   const unsigned char * __restrict__ in,
-   const unsigned int n)
-{
-   unsigned int i, k;
-
-   for(i = 0 ; i < n ; i++)
-   {
-      k = PACK_DENSITY * i;
-
-      // geno is interpreted as a char, however a1 and a2 are bits for allele 1
-      // and allele 2. The final genotype is the sum of the alleles, except for
-      // 01 which denotes missing.
-
-      out[k] =   (in[i] & MASK0);
-      out[k+1] = (in[i] & MASK1) >> 2;
-      out[k+2] = (in[i] & MASK2) >> 4;
-      out[k+3] = (in[i] & MASK3) >> 6;
-   }
-}
-*/
-void decode_plink2_hc(const unsigned char* in, const uint32_t sample_ct, const uint32_t bidx, double mean, double sd, MatrixXd* outp) {
-  const uint64_t* in_alias = (const uint64_t*)in;
-  const uint32_t word_ct_m1 = (sample_ct - 1) / 32;
+void decode_plink2_hc(const uintptr_t* genovec, const uint32_t sample_ct, const uint32_t bidx, double mean, double sd, MatrixXd* outp) {
+  const uint32_t word_ct_m1 = (sample_ct - 1) / plink2::kBitsPerWordD2;
   double lookup[4];
   if (sd > VAR_TOL) {
     const double inv_sd = 1.0 / sd;
@@ -175,19 +89,19 @@ void decode_plink2_hc(const unsigned char* in, const uint32_t sample_ct, const u
     lookup[2] = 0;
     lookup[3] = 0;
   }
-  uint32_t loop_len = 32;
+  uint32_t loop_len = plink2::kBitsPerWordD2;
   uint32_t widx = 0;
   while (1) {
     if (widx >= word_ct_m1) {
       if (widx > word_ct_m1) {
         return;
       }
-      loop_len = 1 + (sample_ct - 1) % 32;
+      loop_len = 1 + (sample_ct - 1) % plink2::kBitsPerWordD2;
     }
-    uint64_t cur_word = in_alias[widx];
-    const uint32_t offset = widx * 32;
+    uintptr_t cur_word = genovec[widx];
+    const uint32_t offset = widx * plink2::kBitsPerWordD2;
     for (uint32_t uii = 0; uii < loop_len; ++uii) {
-      const uint64_t cur_plink1_geno = cur_word & 3;
+      const uintptr_t cur_plink1_geno = cur_word & 3;
       (*outp)(uii + offset, bidx) = lookup[cur_plink1_geno];
       cur_word >>= 2;
     }
@@ -199,60 +113,38 @@ void Data::get_size()
 {
    verbose && STDOUT << timestamp() << "Analyzing BED/PGEN file '"
       << geno_filename << "'";
-   /*
    plink2::PgenHeaderCtrl header_ctrl;
    char errstr_buf[plink2::kPglErrstrBufBlen];
-   plink2::PglErr reterr = PgfiInitPhase1(geno_filename, 0xffffffffU, N, 0, &header_ctrl, &pgfi, &pgfi_alloc_cacheline_ct, errstr_buf);
+   uintptr_t cur_alloc_cacheline_ct;
+   plink2::PglErr reterr = PgfiInitPhase1(geno_filename, 0xffffffffU, N, 0, &header_ctrl, &pgfi, &cur_alloc_cacheline_ct, errstr_buf);
    if (reterr) {
       throw std::runtime_error(errstr_buf);
    }
-   if (cachealigned_malloc(pgfi_alloc_cacheline_ct * plink2::kCacheline, &pgfi_alloc)) {
+   if (plink2::cachealigned_malloc(cur_alloc_cacheline_ct * plink2::kCacheline, &pgfi_alloc)) {
       throw std::runtime_error("Out of memory.");
    }
    nsnps = pgfi.raw_variant_ct;
-   ;;;
-   */
-   std::ifstream in(geno_filename, std::ios::in | std::ios::binary);
-
-   if(!in)
-   {
-      std::string err = std::string("[Data::read_bed] Error reading file ")
-	  + geno_filename + ", error " + strerror(errno);
-      throw std::runtime_error(err);
+   uint32_t max_vrec_width;
+   reterr = PgfiInitPhase2(header_ctrl, 0, 0, 0, 0, nsnps, &max_vrec_width, &pgfi, pgfi_alloc, &cur_alloc_cacheline_ct, errstr_buf);
+   if (reterr) {
+      throw std::runtime_error("Out of memory.");
    }
-
-   in.seekg(0, std::ifstream::end);
-
-   // file size in bytes, ignoring first 3 bytes (2byte magic number + 1byte mode)
-   len = (unsigned long long)in.tellg() - 3;
-
-   // size of packed data, in bytes, per SNP
-   np = (unsigned long long)ceil((double)N / PACK_DENSITY);
-   nsnps = (unsigned int)(len / np);
-   in.seekg(3, std::ifstream::beg);
-   in.close();
-
-   verbose && STDOUT << ", found " << (len + 3) << " bytes, "
-      << nsnps << " SNPs" << std::endl;
+   if (plink2::cachealigned_malloc(cur_alloc_cacheline_ct * plink2::kCacheline, &pgr_alloc)) {
+      throw std::runtime_error("Out of memory.");
+   }
+   reterr = PgrInit(geno_filename, max_vrec_width, &pgfi, &pgr, pgr_alloc);
+   if (reterr) {
+      throw std::runtime_error("Out of memory.");
+   }
 }
 
 // Prepare input stream etc before reading in SNP blocks
 void Data::prepare()
 {
-   in.open(geno_filename, std::ios::in | std::ios::binary);
-   in.seekg(3, std::ifstream::beg);
-
-   if(!in)
-   {
-      std::string err = std::string("[Data::read_bed] Error reading file ")
-	 + geno_filename;
-      throw std::runtime_error(err);
+  if (plink2::cachealigned_malloc(plink2::RoundUpPow2((N + 3) / 4, plink2::kCacheline), &genovec)) {
+      throw std::runtime_error("Out of memory.");
    }
-
-   tmp = new unsigned char[plink2::RoundUpPow2(np, 8)];
-
-   // Allocate more than the sample size since data must take up whole bytes
-   tmp2 = new uint16_t[N];
+   // todo: dosage_present, dosage_main
 
    avg = new double[nsnps]();
    visited = new bool[nsnps]();
@@ -274,7 +166,7 @@ void Data::prepare()
 // X is handled accordingly with the block size (X may be bigger than the
 // block).
 void Data::read_snp_block(unsigned int start_idx, unsigned int stop_idx,
-   bool transpose, bool resize)
+                          bool transpose, bool resize)
 {
    in.seekg(3 + np * start_idx);
 
@@ -308,9 +200,12 @@ void Data::read_snp_block(unsigned int start_idx, unsigned int stop_idx,
       unsigned int k = start_idx + j;
 
       // read raw genotypes
-      // replace this with PgrGet(nullptr, nullptr, N, k, pgrp, (uintptr_t*)tmp)
-      // then with PgrGetD(nullptr, nullptr, N, k, pgrp, (uintptr_t*)tmp, dosage_present, dosage_main, &dosage_ct)
-      in.read((char*)tmp, sizeof(char) * np);
+      // replace this with PgrGet(nullptr, nullptr, N, k, &pgr, (uintptr_t*)tmp)
+      // then with PgrGetD(nullptr, nullptr, N, k, &pgr, (uintptr_t*)tmp, dosage_present, dosage_main, &dosage_ct)
+      plink2::PglErr reterr = PgrGet(nullptr, nullptr, N, k, &pgr, genovec);
+      if (reterr) {
+         throw std::runtime_error("File read/decode failure.");
+      }
 
       // Compute average per SNP, excluding missing values
       double snp_avg = 0;
@@ -319,23 +214,16 @@ void Data::read_snp_block(unsigned int start_idx, unsigned int stop_idx,
       // We've seen this SNP, don't need to compute its average again
       if(!visited[k])
       {
-	 // decode the genotypes and convert to 0/1/2/NA
-	 decode_plink(tmp2, tmp, np);
-
 	 double P, sd;
 
 	 if(!use_preloaded_maf)
 	 {
-	    for(unsigned int i = 0 ; i < N ; i++)
-      	    {
-      	       double s = (double)tmp2[i];
-      	       if(tmp2[i] != PLINK2_NA)
-      	       {
-      	          snp_avg += s;
-      	          ngood++;
-      	       }
-      	    }
-      	    snp_avg /= ngood * PLINK2_SCALE;
+            std::array<uint32_t, 4> genocounts;
+            plink2::ZeroTrailingQuaters(N, genovec);
+            plink2::GenovecCountFreqsUnsafe(genovec, N, genocounts);
+            ngood = genocounts[0] + genocounts[1] + genocounts[2];
+            snp_avg = genocounts[1] + 2 * genocounts[2];
+      	    snp_avg /= ngood;
 
 	    // Store the 4 possible standardised genotypes for each SNP
 	    P = snp_avg / 2.0;
@@ -350,7 +238,7 @@ void Data::read_snp_block(unsigned int start_idx, unsigned int stop_idx,
 	       throw std::runtime_error(err);
 	    }
 
-            // std::cout << snp_avg << "," << sd << std::endl;
+            std::cout << snp_avg << "," << sd << std::endl;
 	    X_meansd(k, 0) = snp_avg;
 	    X_meansd(k, 1) = sd;
 	 }
@@ -368,27 +256,14 @@ void Data::read_snp_block(unsigned int start_idx, unsigned int stop_idx,
       // original format (see comments for decode_plink).
       // There is a bit of waste here in the first time the SNP is visited, as
       // we unpack the data twice, once with decoding and once without.
-      /*
-      decode_plink_simple(tmp2, tmp, np);
-
-      for(unsigned int i = 0 ; i < N ; i++)
-      {
-	 X(i, j) = scaled_geno_lookup(tmp2[i], k);
-      }
-      */
-      decode_plink2_hc(tmp, N, j, X_meansd(k, 0), X_meansd(k, 1), &X);
+      decode_plink2_hc(genovec, N, j, X_meansd(k, 0), X_meansd(k, 1), &X);
    }
 }
 
 // Reads an entire bed file into memory
 // Expects PLINK bed in SNP-major format
-void Data::read_bed(bool transpose)
-{
-  std::cout << "wtf" << std::endl;
-   if(transpose)
-      X = MatrixXd(nsnps, N);
-   else
-      X = MatrixXd(N, nsnps);
+void Data::read_bed() {
+   X = MatrixXd(N, nsnps);
 
    unsigned int md = nsnps / 50;
 
@@ -398,46 +273,22 @@ void Data::read_bed(bool transpose)
       // read raw genotypes
       // replace this with PgrGet(nullptr, nullptr, N, k, pgrp, (uintptr_t*)tmp)
       // then with PgrGetD(nullptr, nullptr, N, k, pgrp, (uintptr_t*)tmp, dosage_present, dosage_main, &dosage_ct)
-      in.read((char*)tmp, sizeof(char) * np);
-
-      // decode the genotypes
-      decode_plink(tmp2, tmp, np);
+      plink2::PglErr reterr = PgrGet(nullptr, nullptr, N, j, &pgr, genovec);
+      if (reterr) {
+         throw std::runtime_error("File read/decode failure.");
+      }
 
       // Compute average per SNP, excluding missing values
-      avg[j] = 0;
-      unsigned int ngood = 0;
-      for(unsigned int i = 0 ; i < N ; i++)
-      {
-	 double s = (double)tmp2[i];
-	 if(tmp2[i] != PLINK2_NA)
-	 {
-	    avg[j] += s;
-	    ngood++;
-	 }
-      }
-      avg[j] /= ngood * PLINK2_SCALE;
+      std::array<uint32_t, 4> genocounts;
+      plink2::ZeroTrailingQuaters(N, genovec);
+      plink2::GenovecCountFreqsUnsafe(genovec, N, genocounts);
+      uint32_t ngood = genocounts[0] + genocounts[1] + genocounts[2];
+      double snp_avg = genocounts[1] + 2 * genocounts[2];
+      snp_avg /= ngood;
+      avg[j] = snp_avg;
 
       // Impute using average per SNP
-      for(unsigned int i = 0 ; i < N ; i++)
-      {
-	 double s = (double)tmp2[i];
-	 {
-	    if(transpose)
-	    {
-	       if(s != PLINK2_NA)
-		  X(j, i) = s * PLINK2_INVSCALE;
-	       else
-		  X(j, i) = avg[j];
-	    }
-	    else
-	    {
-	       if(s != PLINK2_NA)
-		  X(i, j) = s * PLINK2_INVSCALE;
-	       else
-		  X(i, j) = avg[j];
-	    }
-	 }
-      }
+      decode_plink2_hc(genovec, N, j, snp_avg, 1.0, &X);
 
       if(verbose && j % md == md - 1)
 	 STDOUT << timestamp() << "Reading genotypes, "
@@ -445,10 +296,7 @@ void Data::read_bed(bool transpose)
 	    << std::endl;
    }
 
-   if(transpose)
-      p = X.rows();
-   else
-      p = X.cols();
+   p = X.cols();
 
    verbose && STDOUT << timestamp() << "Loaded genotypes: "
       << N << " samples, " << p << " SNPs" << std::endl;

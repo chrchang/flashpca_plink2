@@ -80,10 +80,9 @@ class Data {
       Data();
       ~Data();
       void prepare();
-      void read_bed(bool transpose);
-      void read_pgen();
+      void read_bed();
       void read_snp_block(unsigned int start_idx, unsigned int stop_idx,
-	 bool transpose, bool resize);
+                          bool transpose, bool resize);
       void get_size();
       void read_pheno(const char *filename, unsigned int firstcol);
       void read_plink_bim(const char *filename);
@@ -92,20 +91,18 @@ class Data {
       std::string tolower(const std::string& v);
 
    private:
-      unsigned char *tmp;
-      uint16_t* tmp2;
+      uintptr_t* genovec;
+  // uint16_t* tmp2;
 
       unsigned long long np;
       std::ifstream in;
       plink2::PgenFileInfo pgfi;
       unsigned char* pgfi_alloc;
       plink2::PgenReader pgr;
+      unsigned char* pgr_alloc;
       double* avg;
       //VectorXd tmpx;
       bool* visited;
-
-      // the standardised values for the 3 genotypes + NA, for each SNP
-      // ArrayXXd scaled_geno_lookup;
 };
 
 NamedMatrixWrapper read_text(
