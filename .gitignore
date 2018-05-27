@@ -1,0 +1,9 @@
+._*
+*.o
+.RDataTmp
+.Rhistory
+.Rproj.user
+*.bed
+*.bim
+*.fam
+*.log
