@@ -78,11 +78,11 @@ void decode_plink2_hc(const uintptr_t* genovec, const uint32_t sample_ct, const 
   double lookup[4];
   if (sd > VAR_TOL) {
     const double inv_sd = 1.0 / sd;
-    lookup[3] = (0 - mean) * inv_sd;
-    lookup[2] = (1 - mean) * inv_sd;
-    lookup[0] = (2 - mean) * inv_sd;
-    lookup[1] = 0;  // impute to average
-    // std::cout << lookup[3] << "," << lookup[2] << "," << lookup[0] << std::endl;
+    lookup[0] = (0 - mean) * inv_sd;
+    lookup[1] = (1 - mean) * inv_sd;
+    lookup[2] = (2 - mean) * inv_sd;
+    lookup[3] = 0;  // impute to average
+    // std::cout << lookup[0] << "," << lookup[1] << "," << lookup[2] << std::endl;
   } else {
     lookup[0] = 0;
     lookup[1] = 0;
@@ -200,8 +200,7 @@ void Data::read_snp_block(unsigned int start_idx, unsigned int stop_idx,
       unsigned int k = start_idx + j;
 
       // read raw genotypes
-      // replace this with PgrGet(nullptr, nullptr, N, k, &pgr, (uintptr_t*)tmp)
-      // then with PgrGetD(nullptr, nullptr, N, k, &pgr, (uintptr_t*)tmp, dosage_present, dosage_main, &dosage_ct)
+      // replace this with PgrGetD(nullptr, nullptr, N, k, &pgr, genovec, dosage_present, dosage_main, &dosage_ct)
       plink2::PglErr reterr = PgrGet(nullptr, nullptr, N, k, &pgr, genovec);
       if (reterr) {
          throw std::runtime_error("File read/decode failure.");
@@ -238,7 +237,6 @@ void Data::read_snp_block(unsigned int start_idx, unsigned int stop_idx,
 	       throw std::runtime_error(err);
 	    }
 
-            std::cout << snp_avg << "," << sd << std::endl;
 	    X_meansd(k, 0) = snp_avg;
 	    X_meansd(k, 1) = sd;
 	 }
@@ -271,8 +269,7 @@ void Data::read_bed() {
    for(unsigned int j = 0 ; j < nsnps; j++)
    {
       // read raw genotypes
-      // replace this with PgrGet(nullptr, nullptr, N, k, pgrp, (uintptr_t*)tmp)
-      // then with PgrGetD(nullptr, nullptr, N, k, pgrp, (uintptr_t*)tmp, dosage_present, dosage_main, &dosage_ct)
+      // replace this with PgrGetD(nullptr, nullptr, N, k, pgrp, genovec, dosage_present, dosage_main, &dosage_ct)
       plink2::PglErr reterr = PgrGet(nullptr, nullptr, N, j, &pgr, genovec);
       if (reterr) {
          throw std::runtime_error("File read/decode failure.");
