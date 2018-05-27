@@ -71,6 +71,7 @@ Data::~Data()
 
 #define PLINK2_NA 65535
 #define PLINK2_SCALE 16384
+#define PLINK2_INVSCALE (1.0 / PLINK2_SCALE)
 
 void decode_plink(uint16_t * __restrict__ out,
    const unsigned char * __restrict__ in,
@@ -135,6 +136,7 @@ void decode_plink(uint16_t * __restrict__ out,
    }
 }
 
+/*
 void decode_plink_simple(uint16_t * __restrict__ out,
    const unsigned char * __restrict__ in,
    const unsigned int n)
@@ -145,16 +147,52 @@ void decode_plink_simple(uint16_t * __restrict__ out,
    {
       k = PACK_DENSITY * i;
 
-      /* geno is interpreted as a char, however a1 and a2 are bits for allele 1 and
-       * allele 2. The final genotype is the sum of the alleles, except for 01
-       * which denotes missing.
-       */
+      // geno is interpreted as a char, however a1 and a2 are bits for allele 1
+      // and allele 2. The final genotype is the sum of the alleles, except for
+      // 01 which denotes missing.
 
       out[k] =   (in[i] & MASK0);
       out[k+1] = (in[i] & MASK1) >> 2;
       out[k+2] = (in[i] & MASK2) >> 4;
       out[k+3] = (in[i] & MASK3) >> 6;
    }
+}
+*/
+void decode_plink2_hc(const unsigned char* in, const uint32_t sample_ct, const uint32_t bidx, double mean, double sd, MatrixXd* outp) {
+  const uint64_t* in_alias = (const uint64_t*)in;
+  const uint32_t word_ct_m1 = (sample_ct - 1) / 32;
+  double lookup[4];
+  if (sd > VAR_TOL) {
+    const double inv_sd = 1.0 / sd;
+    lookup[3] = (0 - mean) * inv_sd;
+    lookup[2] = (1 - mean) * inv_sd;
+    lookup[0] = (2 - mean) * inv_sd;
+    lookup[1] = 0;  // impute to average
+    // std::cout << lookup[3] << "," << lookup[2] << "," << lookup[0] << std::endl;
+  } else {
+    lookup[0] = 0;
+    lookup[1] = 0;
+    lookup[2] = 0;
+    lookup[3] = 0;
+  }
+  uint32_t loop_len = 32;
+  uint32_t widx = 0;
+  while (1) {
+    if (widx >= word_ct_m1) {
+      if (widx > word_ct_m1) {
+        return;
+      }
+      loop_len = 1 + (sample_ct - 1) % 32;
+    }
+    uint64_t cur_word = in_alias[widx];
+    const uint32_t offset = widx * 32;
+    for (uint32_t uii = 0; uii < loop_len; ++uii) {
+      const uint64_t cur_plink1_geno = cur_word & 3;
+      (*outp)(uii + offset, bidx) = lookup[cur_plink1_geno];
+      cur_word >>= 2;
+    }
+    ++widx;
+  }
 }
 
 void Data::get_size()
@@ -211,7 +249,7 @@ void Data::prepare()
       throw std::runtime_error(err);
    }
 
-   tmp = new unsigned char[np];
+   tmp = new unsigned char[plink2::RoundUpPow2(np, 8)];
 
    // Allocate more than the sample size since data must take up whole bytes
    tmp2 = new uint16_t[N];
@@ -220,7 +258,7 @@ void Data::prepare()
    visited = new bool[nsnps]();
    X_meansd = MatrixXd::Zero(nsnps, 2); // TODO: duplication here with avg
 
-   scaled_geno_lookup = ArrayXXd::Zero(4, nsnps);
+   // scaled_geno_lookup = ArrayXXd::Zero(4, nsnps);
 
    verbose && STDOUT << timestamp() << "Detected BED file: "
       << geno_filename << " with " << (len + 3)
@@ -323,27 +361,6 @@ void Data::read_snp_block(unsigned int start_idx, unsigned int stop_idx,
 	 }
 
 	 // scaled genotyped initialised to zero
-	 if(sd > VAR_TOL)
-	 {
-	    // Note thet scaled values for the genotypes are stored based on
-	    // the PLINK indexing rather than the actual dosage indexing,
-	    // which lets us later just read the PLINK data and not have to
-	    // convert the dosages.
-	    //
-	    // plink '3' -> actual dosage '0'
-	    // plink '2' -> actual dosage '1'
-	    // plink '0' -> actual dosage '2'
-	    // plink '1' -> actual dosage '3' (NA)
-	    //*                   plink BED           sparsnp
- 	    //* minor homozyous:  00 => numeric 0     10 => numeric 2
- 	    //* heterozygous:     10 => numeric 2     01 => numeric 1
- 	    //* major homozygous: 11 => numeric 3     00 => numeric 0
- 	    //* missing:          01 => numeric 1     11 => numeric 3
-	    scaled_geno_lookup(3, k) = (0 - snp_avg) / sd;
-	    scaled_geno_lookup(2, k) = (1 - snp_avg) / sd;
-	    scaled_geno_lookup(0, k) = (2 - snp_avg) / sd;
-	    scaled_geno_lookup(1, k) = 0; // impute to average
-	 }
 	 visited[k] = true;
       }
 
@@ -351,12 +368,15 @@ void Data::read_snp_block(unsigned int start_idx, unsigned int stop_idx,
       // original format (see comments for decode_plink).
       // There is a bit of waste here in the first time the SNP is visited, as
       // we unpack the data twice, once with decoding and once without.
+      /*
       decode_plink_simple(tmp2, tmp, np);
 
       for(unsigned int i = 0 ; i < N ; i++)
       {
 	 X(i, j) = scaled_geno_lookup(tmp2[i], k);
       }
+      */
+      decode_plink2_hc(tmp, N, j, X_meansd(k, 0), X_meansd(k, 1), &X);
    }
 }
 
@@ -405,14 +425,14 @@ void Data::read_bed(bool transpose)
 	    if(transpose)
 	    {
 	       if(s != PLINK2_NA)
-		  X(j, i) = s;
+		  X(j, i) = s * PLINK2_INVSCALE;
 	       else
 		  X(j, i) = avg[j];
 	    }
 	    else
 	    {
 	       if(s != PLINK2_NA)
-		  X(i, j) = s;
+		  X(i, j) = s * PLINK2_INVSCALE;
 	       else
 		  X(i, j) = avg[j];
 	    }

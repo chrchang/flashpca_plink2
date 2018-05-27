@@ -105,7 +105,7 @@ class Data {
       bool* visited;
 
       // the standardised values for the 3 genotypes + NA, for each SNP
-      ArrayXXd scaled_geno_lookup;
+      // ArrayXXd scaled_geno_lookup;
 };
 
 NamedMatrixWrapper read_text(
