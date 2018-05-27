@@ -24,7 +24,6 @@
 #include "pgenlib_internal.h"
 
 #define PACK_DENSITY 4
-#define PLINK_NA 3
 
 #define PHENO_BINARY_12 0
 #define PHENO_CONTINUOUS 1
@@ -93,7 +92,8 @@ class Data {
       std::string tolower(const std::string& v);
 
    private:
-      unsigned char *tmp, *tmp2;
+      unsigned char *tmp;
+      uint16_t* tmp2;
 
       unsigned long long np;
       std::ifstream in;

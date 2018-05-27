@@ -231,10 +231,14 @@ int main(int argc, char * argv[])
 
    int mem_mode = vm.count("batch") ? MEM_MODE_OFFLINE : MEM_MODE_ONLINE;
 
-   if(mode == MODE_CHECK_PCA || mode == MODE_PREDICT_PCA)
+   if(mode == MODE_CHECK_PCA || mode == MODE_PREDICT_PCA) {
       mem_mode = MEM_MODE_ONLINE;
+   }
+   // er, SCCA doesn't have a problem wtih online mode now...
+   /*
    else if(mode == MODE_SCCA) // TODO: SCCA only runs in batch mode currently
       mem_mode = MEM_MODE_OFFLINE;
+   */
 
    int memory = 2048; // Megabytes
 

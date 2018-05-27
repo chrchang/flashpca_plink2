@@ -24,7 +24,6 @@ Data::Data()
    verbose = false;
    use_preloaded_maf = false;
    pgfi_alloc = nullptr;
-   printf("wtf\n");
    plink2::PreinitPgfi(&pgfi);
    plink2::PreinitPgr(&pgr);
 }
@@ -39,7 +38,6 @@ Data::~Data()
       delete[] tmp2;
    if(avg)
       delete[] avg;
-   printf("destroy\n");
    plink2::CleanupPgr(&pgr);
    plink2::CleanupPgfi(&pgfi);
    plink2::aligned_free_cond(pgfi_alloc);
@@ -70,7 +68,11 @@ Data::~Data()
  * n: number of bytes in input
  *
  */
-void decode_plink(unsigned char * __restrict__ out,
+
+#define PLINK2_NA 65535
+#define PLINK2_SCALE 16384
+
+void decode_plink(uint16_t * __restrict__ out,
    const unsigned char * __restrict__ in,
    const unsigned int n)
 {
@@ -90,50 +92,50 @@ void decode_plink(unsigned char * __restrict__ out,
 
       geno1 = (tmp & MASK0);
       if(geno1 == 1)
-	 out[k] = 3;
+	 out[k] = PLINK2_NA;
       else
       {
 	 a1 = !(geno1 & 1);
 	 a2 = !(geno1 >> 1);
-	 out[k] = a1 + a2;
+	 out[k] = (a1 + a2) * PLINK2_SCALE;
       }
       k++;
 
       geno2 = (tmp & MASK1) >> 2;
       if(geno2 == 1)
-	 out[k] = 3;
+	 out[k] = PLINK2_NA;
       else
       {
 	 a1 = !(geno2 & 1);
 	 a2 = !(geno2 >> 1);
-	 out[k] = a1 + a2;
+	 out[k] = (a1 + a2) * PLINK2_SCALE;
       }
       k++;
 
       geno3 = (tmp & MASK2) >> 4;
       if(geno3 == 1)
-	 out[k] = 3;
+	 out[k] = PLINK2_NA;
       else
       {
 	 a1 = !(geno3 & 1);
 	 a2 = !(geno3 >> 1);
-	 out[k] = a1 + a2;
+	 out[k] = (a1 + a2) * PLINK2_SCALE;
       }
       k++;
 
       geno4 = (tmp & MASK3) >> 6;
       if(geno4 == 1)
-	 out[k] = 3;
+	 out[k] = PLINK2_NA;
       else
       {
 	 a1 = !(geno4 & 1);
 	 a2 = !(geno4 >> 1);
-	 out[k] = a1 + a2;
+	 out[k] = (a1 + a2) * PLINK2_SCALE;
       }
    }
 }
 
-void decode_plink_simple(unsigned char * __restrict__ out,
+void decode_plink_simple(uint16_t * __restrict__ out,
    const unsigned char * __restrict__ in,
    const unsigned int n)
 {
@@ -212,7 +214,7 @@ void Data::prepare()
    tmp = new unsigned char[np];
 
    // Allocate more than the sample size since data must take up whole bytes
-   tmp2 = new unsigned char[np * PACK_DENSITY];
+   tmp2 = new uint16_t[N];
 
    avg = new double[nsnps]();
    visited = new bool[nsnps]();
@@ -289,13 +291,13 @@ void Data::read_snp_block(unsigned int start_idx, unsigned int stop_idx,
 	    for(unsigned int i = 0 ; i < N ; i++)
       	    {
       	       double s = (double)tmp2[i];
-      	       if(tmp2[i] != PLINK_NA)
+      	       if(tmp2[i] != PLINK2_NA)
       	       {
       	          snp_avg += s;
       	          ngood++;
       	       }
       	    }
-      	    snp_avg /= ngood;
+      	    snp_avg /= ngood * PLINK2_SCALE;
 
 	    // Store the 4 possible standardised genotypes for each SNP
 	    P = snp_avg / 2.0;
@@ -310,6 +312,7 @@ void Data::read_snp_block(unsigned int start_idx, unsigned int stop_idx,
 	       throw std::runtime_error(err);
 	    }
 
+            // std::cout << snp_avg << "," << sd << std::endl;
 	    X_meansd(k, 0) = snp_avg;
 	    X_meansd(k, 1) = sd;
 	 }
@@ -361,6 +364,7 @@ void Data::read_snp_block(unsigned int start_idx, unsigned int stop_idx,
 // Expects PLINK bed in SNP-major format
 void Data::read_bed(bool transpose)
 {
+  std::cout << "wtf" << std::endl;
    if(transpose)
       X = MatrixXd(nsnps, N);
    else
@@ -385,13 +389,13 @@ void Data::read_bed(bool transpose)
       for(unsigned int i = 0 ; i < N ; i++)
       {
 	 double s = (double)tmp2[i];
-	 if(tmp2[i] != PLINK_NA)
+	 if(tmp2[i] != PLINK2_NA)
 	 {
 	    avg[j] += s;
 	    ngood++;
 	 }
       }
-      avg[j] /= ngood;
+      avg[j] /= ngood * PLINK2_SCALE;
 
       // Impute using average per SNP
       for(unsigned int i = 0 ; i < N ; i++)
@@ -400,14 +404,14 @@ void Data::read_bed(bool transpose)
 	 {
 	    if(transpose)
 	    {
-	       if(s != PLINK_NA)
+	       if(s != PLINK2_NA)
 		  X(j, i) = s;
 	       else
 		  X(j, i) = avg[j];
 	    }
 	    else
 	    {
-	       if(s != PLINK_NA)
+	       if(s != PLINK2_NA)
 		  X(i, j) = s;
 	       else
 		  X(i, j) = avg[j];
