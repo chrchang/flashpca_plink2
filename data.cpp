@@ -43,7 +43,7 @@ Data::~Data()
    plink2::CleanupPgr(&pgr);
    plink2::CleanupPgfi(&pgfi);
    plink2::aligned_free_cond(pgfi_alloc);
-   // in.close();
+   in.close();
 }
 
 /*
