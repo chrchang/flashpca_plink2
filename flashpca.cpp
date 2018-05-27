@@ -54,6 +54,8 @@ int main(int argc, char * argv[])
       ("fam", po::value<std::string>(), "PLINK fam file")
       ("pheno", po::value<std::string>(), "PLINK phenotype file")
       ("bfile", po::value<std::string>(), "PLINK root name")
+      ("pgen", po::value<std::string>(), "PLINK2 pgen file")
+      ("bpfile", po::value<std::string>(), "PLINK2 hybrid root name")
       ("ndim,d", po::value<int>(), "number of PCs to output")
       ("standx,s", po::value<std::string>(),
 	 "standardization method for genotypes [binom2 | binom]")
@@ -279,19 +281,23 @@ int main(int argc, char * argv[])
 
    std::string fam_file, geno_file, bim_file, pheno_file;
 
-   if(vm.count("bfile"))
-   {
+   if (vm.count("bfile")) {
       geno_file = vm["bfile"].as<std::string>() + std::string(".bed");
       bim_file = vm["bfile"].as<std::string>() + std::string(".bim");
       fam_file = vm["bfile"].as<std::string>() + std::string(".fam");
-   }
-   else
-   {
+   } else if (vm.count("bpfile")) {
+      geno_file = vm["bpfile"].as<std::string>() + std::string(".pgen");
+      bim_file = vm["bpfile"].as<std::string>() + std::string(".bim");
+      fam_file = vm["bpfile"].as<std::string>() + std::string(".fam");
+   } else {
       bool good = true;
-      if(vm.count("bed"))
+      if (vm.count("bed")) {
 	 geno_file = vm["bed"].as<std::string>();
-      else
+      } else if (vm.count("pgen")) {
+         geno_file = vm["pgen"].as<std::string>();
+      } else {
 	 good = false;
+      }
 
       if(good && vm.count("bim"))
 	 bim_file = vm["bim"].as<std::string>();
@@ -305,8 +311,8 @@ int main(int argc, char * argv[])
 
       if(!good)
       {
-	 std::cerr << "Error: you must specify either --bfile "
-	    << "or --bed / --fam / --bim" << std::endl
+	 std::cerr << "Error: you must specify either --b{p}file "
+	    << "or --{bed,pgen} / --fam / --bim" << std::endl
 	    << "Use --help to get more help"
 	    << std::endl;
 	 return EXIT_FAILURE;
@@ -702,7 +708,7 @@ int main(int argc, char * argv[])
 	 else
 	 {
 	    // New Spectra algorithm
-	    rpca.pca_fast(data, block_size, 
+	    rpca.pca_fast(data, block_size,
 	       n_dim, maxiter, tol, seed, do_loadings);
 	 }
 	 std::cout << timestamp() << "PCA done" << std::endl;
